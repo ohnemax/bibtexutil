@@ -3,7 +3,7 @@
 use Text::BibTeX;
 use Config::IniFiles;
 use Getopt::Long;
-use Regexp::Grammars;
+#use Regexp::Grammars;
 
 my $version = "0.01";
 #  print "The value is " . $cfg->val( 'Section', 'Parameter' ) . "."
@@ -41,8 +41,8 @@ bibtexutil.pl extract somefiles.bib filter "author=kuett"
 
 #Options first
 GetOptions("version|v" => \$option_version, 
-	   "d|directory=s" => \$option_filedirectory, 
-	   "i|inputfile=s" => \$option_bibtexfile
+	   "d|directory=s" => \$option_bibfolder, 
+	   "i|inputfile=s" => \$option_bibfilename
 );
 
 # version is easy to deal with...
@@ -120,21 +120,52 @@ is treated as 'year=2010 or (year=2011 and author=kuett)').\n";
 }
 
 # get command + parameters
+my @parameters;
+my $command;
 
-# get filter
-
-while(shift @ARGV ne "filter") {}
-
-$filter_string = "";
-while($part = shift @ARGV) {
-    $filter_string .= " " . $part;
+if($#ARGV + 1 != 0) {
+    $command = $ARGV[0];
+    if(exists $commands { $command }) {
+	while($parameter = shift @ARGV) {
+	    if($parameter eq "filter") {
+		$filterkeyword = 1;
+		last;
+	    }
+	    push(@parameters, $parameter);
+	}
+    }
+    else {
+	print "Error: Command " . $command . " does not exist.\n";
+	print "Show list of commands with: bibtexutil.pl help\n";
+	exit;
+    }
 }
 
-print $filter_string, "\n";
+# get filter
+if($#ARGV + 1 != 0) {
+    $filter_string = "";
+    while($part = shift @ARGV) {
+	$filter_string .= " " . $part;
+    }
+    $filterpresent = 1;
+    $filter_string =~ s/^ //;
+}
+else {
+    if($filterkeyword) {
+	print "Error: If you use the keyword 'filter' you should give some filter parameters!\n";
+	print "Help for filter is given with: bibtexutil.pl help\n";
+	exit;
+    }
+    $filter_string = "";
+    $filterpresent = 0;
+}
+
 # and / or for separation + brackets, ! is working as well
 # CAREFUL: Wrong recursion...
 
-my $filter_parser = qr{ 
+my $filter_parser = do {
+    use Regexp::Grammars;
+    qr{
         <Answer>
 
         <rule: Answer>
@@ -154,38 +185,183 @@ my $filter_parser = qr{
     [\w]+
 
     <rule: expression>
-    [\.\*\\\s\w]+
+    [\.\*\\\s\w/]+
 
     <token: Literal>
         <MATCH=(  \w+=[\.\*\\\s\w]+  )>
     }xms;
+};
 
 if ($filter_string =~ $filter_parser) {
-    print "haha\n";
+    $filter_array = \%/;
     use Data::Dumper 'Dumper';
-    print Dumper \%/;
+    print Dumper $filter_array;
 }
 
+#Configuration variables
+my $bibfilename = "";
+my $bibfolder = "";
+my $bibfolderpresent = 0;
+my $cfg;
 
 # Read configuration from file, otherwise check for .bib file in current directory
-if (-e "~/.bibtexutil/config.ini") {
-    my $cfg = Config::IniFiles->new( -file => "~/.bibtexutil/config.ini" );
-
+if (-e $ENV{"HOME"} . "/.bibtexutil/config.ini") {
+    $cfg = Config::IniFiles->new( -file => $ENV{"HOME"} . "/.bibtexutil/config.ini" );
+    if($cfg->exists("bibtexutil", "bibfilename")) {
+	$bibfilename = $cfg->val("bibtexutil", "bibfilename");
+    }
+    else {
+	print "Error: Incomplete config file exists. Use 'bibtexutil.pl configure' or manual edit to fix it.\n";
+	exit;
+    }
+    if($cfg->exists("bibtexutil", "bibfolder")) {
+	$bibfolder = $cfg->val("bibtexutil", "bibfolder");
+	$bibfolderpresent = 1;
+    }
+    else {
+	$bibfolderpresent = 0;
+    }
 } 
 else {
     #check for .bib file in current directory
 }
 
 # Overrule configuration by options (pre-set above)
-if($option_bibtexfile) {
-    print $option_bibtexfile, "\n";
+if($option_bibfilename) {
+    print $option_bibfilename, "\n";
 }
-if($option_filedirectory) {
-    print $option_filedirectory, "\n";
+if($option_bibfolder) {
+    print $option_bibfolder, "\n";
 }
 
+if($command eq 'extract') {
+   print "extract\n"; 
+}
+elsif ($command eq 'field-rename') { 
+    print "Not yet implemented\n";
+    exit;
+}
+elsif ($command eq 'field-delete') { 
+    print "Not yet implemented\n";
+    exit;
+}
+elsif ($command eq 'field-add') { 
+    print "Not yet implemented\n";
+    exit;
+}
+elsif ($command eq 'value-replace') { 
+    print "Not yet implemented\n";
+    exit;
+}
+elsif ($command eq 'parse') { 
+    print "Not yet implemented\n";
+    exit;
+}
+elsif ($command eq 'bibtex2biblatex') { 
+    print "Not yet implemented\n";
+    exit;
+}
+elsif ($command eq 'biblatex2bibtex') { 
+    print "Not yet implemented\n";
+    exit;
+}
+elsif ($command eq 'configure') { 
+    print "Configuration of bibtexutil will be written in ~/.bibtexutil/config.ini\n";
+    if (-e $ENV{"HOME"} . "/.bibtexutil/config.ini") {
+	print "It seems that there is a file already. The following questions let you change values\n";
+    }
+    print "\n";
+    print "Default .bib inputfile [" . $bibfilename . "]: ";
+    $newfilename = <>;
+    chomp $newfilename;
+    if($newfilename eq "") {
+	$newfilename = $bibfilename;
+    }
+    while(!(-e $newfilename)) {
+	print "Error: No file exists with the given filename.\n";
+	print "Default .bib inputfile [" . $bibfilename . "] :";
+	$newfilename = <>;
+	chomp $newfilename;
+	if($newfilename eq "") {
+	    $newfilename = $bibfilename;
+	}
+    }
+    $yesno = "";
+    while(($yesno ne "y") and ($yesno ne "n")) {
+	if($bibfolderpresent == 1) {
+	    $yesno = "([y]/n)";
+	    $defaultanswer = "y";
+	}
+	else {
+	    $yesno = "(y/[n])";
+	    $defaultanswer = "n";
+	}
+	print "Do you want to add an directory with attached files? " . $yesno . ": ";
+	$yesno = <>;
+	chomp $yesno;
+	if($yesno eq "") {
+	    $yesno = $defaultanswer;
+	}
+    }
+    if($yesno eq "y") {
+	print "Default path for attached files [" . $bibfolder . "]: ";
+	$newfolder = <>;
+	chomp $newfolder;
+	if($newfolder eq "") {
+	    $newfolder = $bibfolder;
+	}
+	while(!(-e $newfolder)) {
+	    print "Error: No folder exists with the given path.\n";
+	    print "Default path for attached files [" . $bibfolder . "]: ";
+	    $newfolder = <>;
+	    chomp $newfolder;
+	    if($newfolder eq "") {
+		$newfolder = $bibfolder;
+	    }
+	}
+	$bibfolderpresent = 1;
+    }
+    else {
+	print "No path for attached files needs to be selected\n";
+	$bibfolderpresent = 0;
+    }
+    $bibfilename = $newfilename;
+    $bibfolder = $newfolder;
+    if (-e $ENV{"HOME"} . "/.bibtexutil/config.ini") {
+	$cfg = Config::IniFiles->new( -file => $ENV{"HOME"} . "/.bibtexutil/config.ini" );
+	if($cfg->exists("bibtexutil", "bibfolder") && $bibfolderpresent == 0) {
+	    $cfg->delval("bibtexutil", "bibfolder");
+	}
+	if($bibfolderpresent == 1 && !$cfg->exists("bibtexutil", "bibfolder")) {
+	    $cfg->newval("bibtexutil", "bibfolder", $bibfolder);
+	}
+	if($bibfolderpresent == 1) {
+	    $cfg->setval("bibtexutil", "bibfolder", $bibfolder);
+	}
+	$cfg->setval("bibtexutil", "bibfilename", $bibfilename);
+	$cfg->RewriteConfig();
+    }
+    else {
+	print "NICHT\n";
+	if(!(-e $ENV{"HOME"} . "/.bibtexutil/")) {
+	    mkdir $ENV{"HOME"} . "/.bibtexutil";
+	}
+	$cfg = Config::IniFiles->new(  );	
+	$cfg->SetFileName($ENV{"HOME"} . "/.bibtexutil/config.ini");
+	$cfg->newval("bibtexutil", "bibfilename", $bibfilename);
+	if($bibfolderpresent == 1) {
+	    $cfg->newval("bibtexutil", "bibfolder", $bibfolder);
+	}
+	$cfg->WriteConfig($ENV{"HOME"} . "/.bibtexutil/config.ini") || die "write not possible";
+    }
+
+    print "New configuration settings have been written to file.\n";
+    exit;
+}
+
+
 # Open Bibtexfile
-my $bibfilename = "/home/darkarchon/Documents/Texte/kuett_bibliography.bib";
+
 
 $bibfile = new Text::BibTeX::File $bibfilename;
 
