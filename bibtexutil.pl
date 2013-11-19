@@ -3,6 +3,7 @@
 use Text::BibTeX;
 use Config::IniFiles;
 use Getopt::Long;
+use Regexp::Grammars;
 
 my $version = "0.01";
 #  print "The value is " . $cfg->val( 'Section', 'Parameter' ) . "."
@@ -87,6 +88,22 @@ if (lc($ARGV[0]) eq "help") {
 	print "\n";
 	print "configure\t\tInteractive configuration for bibtexutil.pl\n";
 	print "\n";
+	print "\n";
+	print "On filtering (commands with (*) can use filter):\n";
+	print "After the keyword filter, conditions can be specified. The .bib 
+file is filtered for these. Every condition has to be specified 
+with <fieldname>=<value>.
+<fieldname> is case-insensitive. <value> has only a single 
+wildcard '*' which can stand anywhere and for any number of 
+any character. It is possible to use a regular expression 
+for the search, than <value> has to start and end with '/'. 
+Conditions can be combined using the keyword 'and' and 'or'. 
+Parenthesis ('(' and ')') may be used to order the logical 
+expression.
+ATTENTION: While not using parenthesis, expressions are read 
+from the right side (e.g. 'year=2010 or year=2011 and author=kuett' 
+is treated as 'year=2010 or (year=2011 and author=kuett)').\n";
+	print "\n";
 
     }
     else {
@@ -105,7 +122,49 @@ if (lc($ARGV[0]) eq "help") {
 # get command + parameters
 
 # get filter
-# && / || for separation + brackets
+
+while(shift @ARGV ne "filter") {}
+
+$filter_string = "";
+while($part = shift @ARGV) {
+    $filter_string .= " " . $part;
+}
+
+print $filter_string, "\n";
+# and / or for separation + brackets, ! is working as well
+# CAREFUL: Wrong recursion...
+
+my $filter_parser = qr{ 
+        <Answer>
+
+        <rule: Answer>
+            <condx=Term> <Op=(or|and)> <condy=Answer>
+          | <MATCH=Term>
+
+        <rule: Term>
+            <MATCH=Condition>
+          | <Sign=([!]?)> \( <Answer> \)
+          | <Sign=([!]?)> <Condition>
+          | \( <MATCH=Answer> \)
+
+    <rule: Condition>
+    <field>=<expression>
+
+    <rule: field>
+    [\w]+
+
+    <rule: expression>
+    [\.\*\\\s\w]+
+
+    <token: Literal>
+        <MATCH=(  \w+=[\.\*\\\s\w]+  )>
+    }xms;
+
+if ($filter_string =~ $filter_parser) {
+    print "haha\n";
+    use Data::Dumper 'Dumper';
+    print Dumper \%/;
+}
 
 
 # Read configuration from file, otherwise check for .bib file in current directory
