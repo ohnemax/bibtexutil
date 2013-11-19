@@ -5,6 +5,63 @@ use Config::IniFiles;
 use Getopt::Long;
 #use Regexp::Grammars;
 
+sub recursive_query {
+    my $bibentry = shift;
+    my $statement = shift;
+    my $resy = 0;
+    my $resx = 0;
+    my $fieldvalue = "";
+
+    if(exists $statement->{Op}) {
+	$resx = recursive_query($bibentry, $statement->{condx});
+	$resy = recursive_query($bibentry, $statement->{condy});
+	if($statement->{Op} eq "and") {
+	    return ($resx && $resy);
+	}
+	if($statement->{Op} eq "or") {
+	    return ($resx || $resy);
+	}
+    }
+    elsif(exists $statement->{Condition}) {
+	if(exists $statement->{Sign} and $statement->{Sign} eq "!") {
+	    return not recursive_query($bibentry, $statement->{Condition});	    
+	}
+	else {
+	    return recursive_query($bibentry, $statement->{Condition});	    
+	}
+    }
+    elsif(exists $statement->{Answer})
+    {
+	if(exists $statement->{Sign} and $statement->{Sign} eq "!") {
+	    return not recursive_query($bibentry, $statement->{Answer});	    
+	}
+	else {
+	    return recursive_query($bibentry, $statement->{Answer});	    
+	}
+    }
+    else {
+	if($entry->exists($statement->{field})) {
+	    $fieldvalue = $entry->get($statement->{field});
+	    $fieldvalue =~ s/^\s+//;
+	    $fieldvalue =~ s/\s+$//;
+	    $testvalue = $statement->{expression};
+	    $testvalue =~ s/^\s+//;
+	    $testvalue =~ s/\s+$//;
+
+	    if($fieldvalue eq $testvalue) {
+		return 1;
+	    }
+	    else {
+		return 0;
+	    }
+	}
+	else {
+	    return 0;
+	}
+	return 1;
+    }
+}
+
 my $version = "0.01";
 #  print "The value is " . $cfg->val( 'Section', 'Parameter' ) . "."
 
@@ -197,7 +254,7 @@ if ($filter_string =~ $filter_parser) {
     use Data::Dumper 'Dumper';
 #    print %{$filter_array} , "\n";
 #    print $filter_array->{Answer}->{Op}, "\n";
-#    print Dumper @$filter_array{'Answer'};
+    print Dumper @$filter_array{'Answer'};
 }
 
 
@@ -230,64 +287,6 @@ else {
     #check for .bib file in current directory
 }
 
-sub recursive_query {
-    my $bibentry = shift;
-    my $statement = shift;
-    my $resy = 0;
-    my $resx = 0;
-    my $fieldvalue = "";
-
-    use Data::Dumper 'Dumper';
-    if(exists $statement->{Op}) {
-	$resx = recursive_query($bibentry, $statement->{condx});
-	$resy = recursive_query($bibentry, $statement->{condy});
-	print $resx, "\n";
-	print $resy, "\n";
-	if($statement->{Op} eq "and") {
-	    return ($resx && $resy);
-	}
-	if($statement->{Op} eq "or") {
-	    return ($resx || $resy);
-	}
-    }
-    elsif(exists $statement->{Sign}) {
-	return not recursive_query($bibentry, $statement->{Condition});
-    }
-    else {
-	if($entry->exists($statement->{field})) {
-	    $fieldvalue = $entry->get($statement->{field});
-	    $fieldvalue =~ s/^\s+//;
-	    $fieldvalue =~ s/\s+$//;
-	    $testvalue = $statement->{expression};
-	    $testvalue =~ s/^\s+//;
-	    $testvalue =~ s/\s+$//;
-
-	    if($fieldvalue eq $testvalue) {
-		return 1;
-	    }
-	    else {
-		return 0;
-	    }
-	}
-	else {
-	    return 0;
-	}
-	return 1;
-    }
-
-}
-
-$bibfile = new Text::BibTeX::File $bibfilename;
-$entry = new Text::BibTeX::Entry $bibfile;
-
-print $entry->get('author'), "\n";
-
-print Dumper $filter_array->{Answer};
-
-print "result: ", recursive_query($entry, $filter_array->{Answer}), "\n";
-
-exit;
-
 
 # Overrule configuration by options (pre-set above)
 if($option_bibfilename) {
@@ -297,6 +296,9 @@ if($option_bibfolder) {
     print $option_bibfolder, "\n";
 }
 
+$bibfile = new Text::BibTeX::File;
+$bibfile->open($bibfilename, "r");
+
 if($command eq 'extract') {
     if($#parameters != 1) {
 	print "Error: extract needs specification of output .bib file as parameter.\n";
@@ -304,28 +306,44 @@ if($command eq 'extract') {
     }
     else {
 	$outputfilename = $parameters[1];
+	$outputfile = new Text::BibTeX::File;
 	if(-e $outputfilename) {
-	    print "file existiert";
+	    print "The specified output file already exists. Overwrite? (y/[n]): ";
+	    $yesno = <>;
+	    chomp $yesno;
+	    if ($yesno eq "") {
+		$yesno = "n";
+	    }
+	    while(($yesno ne "y") and ($yesno ne "n")) {
+		print "Please answer 'y' for yes or 'n' for no: ";
+		$yesno = <>;
+		chomp $yesno;
+		if($yesno eq "") {
+		    $yesno = "n";
+		}
+	    }
+	    if($yesno eq "n") {
+		exit;
+	    }
+	    else {
+		$outputfile->open($outputfilename, "w");
+	    }
 	}
 	else {
-	    print "file existiert nicht";
+	    $outputfile->open($outputfilename, "w");
 	}
 
-	$bibfile = new Text::BibTeX::File $bibfilename;
 
 	while ($entry = new Text::BibTeX::Entry $bibfile)
 	{
 	    next unless $entry->parse_ok;
-    
-	    next unless $entry->exists('ranking');
-
-	    recursive_query($entry, $filter_string);
-	    if($entry->get('ranking') eq "rank3") {
-#		print $entry->get('author'), "\n";
-	
+	    if (recursive_query($entry, @$filter_array{'Answer'})) {
+		$entry->write($outputfile);
+		print "Match: " . $entry->key() . " has been extracted to outputfile.\n";
 	    }
-
 	}	
+
+	$outputfile->close();
 	print "extract\n"; 	
     }
 }
@@ -434,7 +452,6 @@ elsif ($command eq 'configure') {
 	$cfg->RewriteConfig();
     }
     else {
-	print "NICHT\n";
 	if(!(-e $ENV{"HOME"} . "/.bibtexutil/")) {
 	    mkdir $ENV{"HOME"} . "/.bibtexutil";
 	}
@@ -451,22 +468,5 @@ elsif ($command eq 'configure') {
     exit;
 }
 
-
-# Open Bibtexfile
-
-
-$bibfile = new Text::BibTeX::File $bibfilename;
-
-while ($entry = new Text::BibTeX::Entry $bibfile)
-{
-    next unless $entry->parse_ok;
-    
-    next unless $entry->exists('ranking');
-
-    if($entry->get('ranking') eq "rank3") {
-	print $entry->get('author'), "\n";
-	
-    }
-
-}
+$bibfile->close();
 
