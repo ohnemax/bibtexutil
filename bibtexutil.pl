@@ -195,8 +195,12 @@ my $filter_parser = do {
 if ($filter_string =~ $filter_parser) {
     $filter_array = \%/;
     use Data::Dumper 'Dumper';
-    print Dumper $filter_array;
+#    print %{$filter_array} , "\n";
+#    print $filter_array->{Answer}->{Op}, "\n";
+#    print Dumper @$filter_array{'Answer'};
 }
+
+
 
 #Configuration variables
 my $bibfilename = "";
@@ -226,6 +230,65 @@ else {
     #check for .bib file in current directory
 }
 
+sub recursive_query {
+    my $bibentry = shift;
+    my $statement = shift;
+    my $resy = 0;
+    my $resx = 0;
+    my $fieldvalue = "";
+
+    use Data::Dumper 'Dumper';
+    if(exists $statement->{Op}) {
+	$resx = recursive_query($bibentry, $statement->{condx});
+	$resy = recursive_query($bibentry, $statement->{condy});
+	print $resx, "\n";
+	print $resy, "\n";
+	if($statement->{Op} eq "and") {
+	    return ($resx && $resy);
+	}
+	if($statement->{Op} eq "or") {
+	    return ($resx || $resy);
+	}
+    }
+    elsif(exists $statement->{Sign}) {
+	return not recursive_query($bibentry, $statement->{Condition});
+    }
+    else {
+	if($entry->exists($statement->{field})) {
+	    $fieldvalue = $entry->get($statement->{field});
+	    $fieldvalue =~ s/^\s+//;
+	    $fieldvalue =~ s/\s+$//;
+	    $testvalue = $statement->{expression};
+	    $testvalue =~ s/^\s+//;
+	    $testvalue =~ s/\s+$//;
+
+	    if($fieldvalue eq $testvalue) {
+		return 1;
+	    }
+	    else {
+		return 0;
+	    }
+	}
+	else {
+	    return 0;
+	}
+	return 1;
+    }
+
+}
+
+$bibfile = new Text::BibTeX::File $bibfilename;
+$entry = new Text::BibTeX::Entry $bibfile;
+
+print $entry->get('author'), "\n";
+
+print Dumper $filter_array->{Answer};
+
+print "result: ", recursive_query($entry, $filter_array->{Answer}), "\n";
+
+exit;
+
+
 # Overrule configuration by options (pre-set above)
 if($option_bibfilename) {
     print $option_bibfilename, "\n";
@@ -235,7 +298,36 @@ if($option_bibfolder) {
 }
 
 if($command eq 'extract') {
-   print "extract\n"; 
+    if($#parameters != 1) {
+	print "Error: extract needs specification of output .bib file as parameter.\n";
+	exit;
+    }
+    else {
+	$outputfilename = $parameters[1];
+	if(-e $outputfilename) {
+	    print "file existiert";
+	}
+	else {
+	    print "file existiert nicht";
+	}
+
+	$bibfile = new Text::BibTeX::File $bibfilename;
+
+	while ($entry = new Text::BibTeX::Entry $bibfile)
+	{
+	    next unless $entry->parse_ok;
+    
+	    next unless $entry->exists('ranking');
+
+	    recursive_query($entry, $filter_string);
+	    if($entry->get('ranking') eq "rank3") {
+#		print $entry->get('author'), "\n";
+	
+	    }
+
+	}	
+	print "extract\n"; 	
+    }
 }
 elsif ($command eq 'field-rename') { 
     print "Not yet implemented\n";
