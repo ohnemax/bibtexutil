@@ -3,6 +3,8 @@
 use Text::BibTeX;
 use Config::IniFiles;
 use Getopt::Long;
+use File::Copy::Recursive qw(fcopy rcopy dircopy fmove rmove dirmove);
+
 #use Regexp::Grammars;
 
 sub recursive_query {
@@ -254,7 +256,7 @@ if ($filter_string =~ $filter_parser) {
     use Data::Dumper 'Dumper';
 #    print %{$filter_array} , "\n";
 #    print $filter_array->{Answer}->{Op}, "\n";
-    print Dumper @$filter_array{'Answer'};
+#    print Dumper @$filter_array{'Answer'};
 }
 
 
@@ -344,8 +346,71 @@ if($command eq 'extract') {
 	}	
 
 	$outputfile->close();
-	print "extract\n"; 	
     }
+}
+elsif ($command eq 'copy-attachements') { 
+    if($#parameters != 1) {
+	print "Error: copy-attachements needs specification of output folder as parameter.\n";
+	exit;
+    }
+    $destdir = $parameters[1];
+    if(!(-e $destdir)) {
+	exit;
+    }
+    
+    # test for file existencen
+
+    if(!$bibfolderpresent) {
+	print "Error: No folder specified in configuration or on commandline. A folder is required for 'copy-attachements' to work\n";
+	exit;
+    }
+    $filenamespecification = "key-start-folder";
+    
+    while ($entry = new Text::BibTeX::Entry $bibfile)
+    {
+	next unless $entry->parse_ok;
+	if (recursive_query($entry, @$filter_array{'Answer'})) {
+	    print "Match: " . $entry->key() . "\n";
+	    opendir(DIR, $bibfolder) || die $!;
+	    
+	    $key = $entry->key();
+	    $re = qr/$key/;
+	    while (my $file = readdir(DIR)) {
+		if($filenamespecification eq "key-match") {
+		    next unless ($file =~ /^$re\.|^$re$/);
+		    next unless (!(-d $bibfolder . $file));
+		    fcopy($bibfolder . $file, $destdir) || die $!;
+		}
+		elsif($filenamespecification eq "key-match-folder") {
+		    next unless ($file =~ /^$re\.|^$re$/);
+		    if(-d $bibfolder . $file) {
+			rcopy($bibfolder . $file . "/", $destdir . "/" . $file) || die $!;
+		    }
+		    else {
+			fcopy($bibfolder . $file, $destdir) || die $!;
+		    }
+		}
+		elsif($filenamespecification eq "key-start") {
+		    next unless ($file =~ /^$re/);
+		    next unless (!(-d $bibfolder . $file));
+		    fcopy($bibfolder . $file, $destdir) || die $!;
+		}
+		elsif($filenamespecification eq "key-start-folder") {
+		    next unless ($file =~ /^$re/);
+		    if(-d $bibfolder . $file) {
+			rcopy($bibfolder . $file . "/", $destdir . "/" . $file) || die $!;
+		    }
+		    else {
+			fcopy($bibfolder . $file, $destdir) || die $!;
+		    }
+		}
+		print "  " . $file . " has been copied.\n";
+	    }
+	    close DIR;
+
+	}
+    }
+    exit;
 }
 elsif ($command eq 'field-rename') { 
     print "Not yet implemented\n";
