@@ -374,7 +374,7 @@ if($command eq 'extract') {
 	}	
 
 	$outputfile->close();
-    }
+    } 
 }
 elsif ($command eq 'copy-attachements') { 
     if($#parameters != 1) {
@@ -386,12 +386,14 @@ elsif ($command eq 'copy-attachements') {
 	exit;
     }
     
-    # test for file existencen
+    # test for file existence
 
     if(!$bibfolderpresent) {
 	print "Error: No folder specified in configuration or on commandline. A folder is required for 'copy-attachements' to work\n";
 	exit;
     }
+
+    ## FIX TODO --> Put this in configuration
     $filenamespecification = "key-start-folder";
     
     while ($entry = new Text::BibTeX::Entry $bibfile)
@@ -461,6 +463,117 @@ elsif ($command eq 'parse') {
     exit;
 }
 elsif ($command eq 'bibtex2biblatex') { 
+    if($#parameters != 1) {
+	print "Error: bibtex2biblatex needs specification of output .bib file as parameter, as it will not delibaretly overwrite your input file (except for the case the same path and name is provided).\n";
+	exit;
+    }
+    else {
+	$outputfilename = $parameters[1];
+	$outputfile = new Text::BibTeX::File;
+	if(-e $outputfilename) {
+	    print "The specified output file already exists. Overwrite? (y/[n]): ";
+	    $yesno = <>;
+	    chomp $yesno;
+	    if ($yesno eq "") {
+		$yesno = "n";
+	    }
+	    while(($yesno ne "y") and ($yesno ne "n")) {
+		print "Please answer 'y' for yes or 'n' for no: ";
+		$yesno = <>;
+		chomp $yesno;
+		if($yesno eq "") {
+		    $yesno = "n";
+		}
+	    }
+	    if($yesno eq "n") {
+		exit;
+	    }
+	    else {
+		$outputfile->open($outputfilename, "w");
+	    }
+	}
+	else {
+	    $outputfile->open($outputfilename, "w");
+	}
+
+
+	while ($entry = new Text::BibTeX::Entry $bibfile)
+	{
+	    next unless $entry->parse_ok;
+	    if ($filterpresent == 0 or recursive_query($entry, @$filter_array{'Answer'})) {
+
+	use Data::Dumper 'Dumper';
+#   print %{$filter_array} , "\n";
+#    print $filter_array->{Answer}->{Op}, "\n";
+#    print Dumper $entry->fieldlist();
+
+		# address goes into location and gets deleted
+		if($entry->exists('address')) {
+		    if($entry->exists('location')) {
+			if($entry->get('address') eq $entry->get('location')) {
+			    $entry->delete('address');
+			    print $entry->key() . " has been modified (superfluous field address has been deleted).\n";
+			}
+			else {
+			    print "Warning: " . $entry->key() . " has address (bibtex) and location (biblatex) field, both differ in value, don't know what to do. The entry remains unmodified.\n";
+			}
+		    }
+		    else {
+			$newlocation = $entry->get('address');
+			$entry->set('location', $newlocation);
+			$entry->delete('address');
+			print $entry->key() . " has been modified (address -> location).\n";
+		    }
+		}
+
+		# journal goes into journaltitle
+		if($entry->exists('journal')) {
+		    if($entry->exists('journaltitle')) {
+			if($entry->get('journal') eq $entry->get('journaltitle')) {
+			    $entry->delete('journal');
+			    print $entry->key() . " has been modified (superfluous field journal has beend deleted).\n";
+			}
+			else {
+			    print "Warning: " . $entry->key() . " has journal (bibtex) and journaltitle (biblatex) field, both differ in value, don't know what to do. The entry remains unmodified.\n";
+			}
+		    }
+		    else {
+			$newlocation = $entry->get('journal');
+			$entry->set('journaltitle', $newlocation);
+			$entry->delete('journal');
+			print $entry->key() . " has been modified (journal -> journaltitle).\n";
+		    }
+		}
+
+		# school goes into institution
+		if($entry->exists('school')) {
+		    if($entry->exists('institution')) {
+			if($entry->get('school') eq $entry->get('institution')) {
+			    $entry->delete('school');
+			    print $entry->key() . " has been modified (superfluous field school has been deleted).\n";
+			}
+			else {
+			    print "Warning: " . $entry->key() . " has school (bibtex) and institution (biblatex) field, both differ in value, don't know what to do. The entry remains unmodified.\n";
+			}
+		    }
+		    else {
+			$newlocation = $entry->get('school');
+			$entry->set('institution', $newlocation);
+			$entry->delete('school');
+			print $entry->key() . " has been modified (school -> institution).\n";
+		    }
+		}
+
+		print $entry->key() . " has been written to outputfile.\n";
+		$entry->write($outputfile);
+
+	    }
+	}	
+
+	$outputfile->close();
+    } 
+
+    
     print "Not yet implemented\n";
     exit;
 }
