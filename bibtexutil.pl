@@ -269,16 +269,18 @@ my $filter_parser = do {
     }xms;
 };
 
-if ($filter_string =~ $filter_parser) {
-    $filter_array = \%/;
-    use Data::Dumper 'Dumper';
+if($filterpresent) {
+    if ($filter_string =~ $filter_parser) {
+	$filter_array = \%/;
+	use Data::Dumper 'Dumper';
 #   print %{$filter_array} , "\n";
 #    print $filter_array->{Answer}->{Op}, "\n";
 #    print Dumper @$filter_array{'Answer'};
-}
-else {
-    print "Error: Could not parse the filter argument.\n";
-    exit;
+    }
+    else {
+	print "Error: Could not parse the filter argument.\n";
+	exit;
+    }
 }
 
 
@@ -324,7 +326,7 @@ $bibfile = new Text::BibTeX::File;
 $bibfile->open($bibfilename, "r");
 
 if($command eq 'extract') {
-    if(!$filterkeyword) {
+    if(!$filterpresent) {
 	print "Error: extract needs a filter specification.\n";
 	exit;
     }
