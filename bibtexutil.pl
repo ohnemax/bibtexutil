@@ -66,7 +66,7 @@ sub recursive_query {
 	    $fieldvalue =~ s/\s+$//;
 	    $testvalue = $statement->{expression};
 	    $testvalue =~ s/^\s+//;
-v	    $testvalue =~ s/\s+$//;
+	    $testvalue =~ s/\s+$//;
 
 	    if($fieldvalue eq $testvalue) {
 		return 1;
@@ -272,9 +272,13 @@ my $filter_parser = do {
 if ($filter_string =~ $filter_parser) {
     $filter_array = \%/;
     use Data::Dumper 'Dumper';
-#    print %{$filter_array} , "\n";
+#   print %{$filter_array} , "\n";
 #    print $filter_array->{Answer}->{Op}, "\n";
 #    print Dumper @$filter_array{'Answer'};
+}
+else {
+    print "Error: Could not parse the filter argument.\n";
+    exit;
 }
 
 
