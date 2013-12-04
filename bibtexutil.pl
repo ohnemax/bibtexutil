@@ -397,7 +397,7 @@ elsif ($command eq 'copy-attachements') {
     while ($entry = new Text::BibTeX::Entry $bibfile)
     {
 	next unless $entry->parse_ok;
-	if (recursive_query($entry, @$filter_array{'Answer'})) {
+	if ($filterpresent == 0 or recursive_query($entry, @$filter_array{'Answer'})) {
 	    print "Match: " . $entry->key() . "\n";
 	    opendir(DIR, $bibfolder) || die $!;
 	    
