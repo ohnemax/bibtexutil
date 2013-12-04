@@ -90,8 +90,8 @@ my $version = "0.01";
 #Possible Commands and specific help
 my %commands = (
     "extract" => 'Extract new .bib Library\n
-Can be used with filters.
-The path to the new .bib library file has to be given as additional parameter
+Has to be used with filters, otherwise it would be a plain copy.
+The path to the new .bib library file has to be given as additional parameter.
 
 Example:
 bibtexutil.pl extract somefiles.bib filter "author=kuett"
@@ -320,6 +320,10 @@ $bibfile = new Text::BibTeX::File;
 $bibfile->open($bibfilename, "r");
 
 if($command eq 'extract') {
+    if(!$filterkeyword) {
+	print "Error: extract needs a filter specification.\n";
+	exit;
+    }
     if($#parameters != 1) {
 	print "Error: extract needs specification of output .bib file as parameter.\n";
 	exit;
